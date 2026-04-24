@@ -5,8 +5,25 @@ const express = require('express');
 const cors = require('cors');
 const { Server } = require('socket.io');
 
-const PORT = process.env.PORT || 4000;
-const HOST = process.env.HOST || '0.0.0.0';
+function readBootstrap() {
+  const candidates = [];
+  if (process.env.VIEWLOCAL_CONFIG) candidates.push(process.env.VIEWLOCAL_CONFIG);
+  if (process.env.APPDATA) candidates.push(path.join(process.env.APPDATA, 'ViewLocal Server', 'bootstrap.json'));
+  candidates.push(path.join(__dirname, '..', 'bootstrap.json'));
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf8');
+        return JSON.parse(raw);
+      }
+    } catch (_) {}
+  }
+  return {};
+}
+const bootstrap = readBootstrap();
+
+const PORT = Number(process.env.PORT || bootstrap.port || 4000);
+const HOST = process.env.HOST || bootstrap.host || '0.0.0.0';
 
 const app = express();
 app.use(cors());

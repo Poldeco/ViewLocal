@@ -20,6 +20,10 @@ coverage/
 # client build artifacts
 client/release/
 client/node_modules/
-
-# electron-builder cache
 client/dist/
+
+# server build artifacts
+server/node_modules/
+server/release/
+server/frontend/node_modules/
+server/frontend/dist/

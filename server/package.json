@@ -3,21 +3,75 @@
   "version": "1.0.0",
   "description": "ViewLocal server — aggregates screen feeds from LAN clients and serves web UI",
   "private": true,
-  "main": "src/index.js",
+  "main": "src/electron-main.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "build:ui": "cd frontend && npm install && npm run build"
+    "electron": "electron .",
+    "build:ui": "cd frontend && npm install && npm run build",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win --x64"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "electron-log": "^5.1.5",
+    "electron-store": "^8.2.0",
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.1.4"
   },
   "engines": {
     "node": ">=18"
+  },
+  "build": {
+    "appId": "com.poldeco.viewlocal.server",
+    "productName": "ViewLocal Server",
+    "asar": true,
+    "files": [
+      "src/**/*",
+      "frontend/dist/**/*",
+      "package.json",
+      "!frontend/src/**/*",
+      "!frontend/node_modules/**/*",
+      "!frontend/package*.json",
+      "!frontend/vite.config.js",
+      "!frontend/index.html",
+      "!updates/**/*"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "ViewLocal-Server-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility"
+    }
   }
 }

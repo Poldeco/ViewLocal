@@ -1,0 +1,157 @@
+const { app, Tray, Menu, nativeImage, shell, BrowserWindow, dialog } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const log = require('electron-log');
+const Store = require('electron-store');
+
+log.transports.file.level = 'info';
+
+const APP_VERSION = app.getVersion();
+
+const store = new Store({
+  defaults: {
+    port: 4000,
+    host: '0.0.0.0',
+    openDashboardOnStart: true,
+    launchOnStartup: true,
+  },
+});
+
+function applyBootstrap() {
+  try {
+    const candidates = [
+      path.join(app.getPath('userData'), 'bootstrap.json'),
+      process.env.APPDATA ? path.join(process.env.APPDATA, 'ViewLocal Server', 'bootstrap.json') : null,
+    ].filter(Boolean);
+    for (const p of candidates) {
+      if (!fs.existsSync(p)) continue;
+      const bs = JSON.parse(fs.readFileSync(p, 'utf8'));
+      log.info('applying bootstrap', bs);
+      if (bs.port) store.set('port', Number(bs.port));
+      if (bs.host) store.set('host', String(bs.host));
+      if (typeof bs.openDashboardOnStart === 'boolean') store.set('openDashboardOnStart', bs.openDashboardOnStart);
+      if (typeof bs.launchOnStartup === 'boolean') store.set('launchOnStartup', bs.launchOnStartup);
+      try { fs.unlinkSync(p); } catch (_) {}
+      return true;
+    }
+  } catch (e) { log.warn('bootstrap apply failed', e); }
+  return false;
+}
+
+function setAutoLaunch(enabled) {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: !!enabled,
+      path: process.execPath,
+      args: ['--hidden'],
+    });
+  } catch (e) { log.warn('login item failed', e); }
+}
+
+let tray = null;
+let serverUrl = '';
+let infoWin = null;
+
+function getLocalIps() {
+  const nets = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) ips.push({ iface: name, ip: net.address });
+    }
+  }
+  return ips;
+}
+
+function iconImage() {
+  const p = path.join(__dirname, '..', 'build', 'icon.png');
+  if (fs.existsSync(p)) return nativeImage.createFromPath(p);
+  return nativeImage.createEmpty();
+}
+
+function buildMenu() {
+  const ips = getLocalIps();
+  const port = store.get('port');
+  const ipItems = ips.map((x) => ({
+    label: `${x.ip}:${port}  (${x.iface})`,
+    click: () => shell.openExternal(`http://${x.ip}:${port}/`),
+  }));
+  if (ipItems.length === 0) ipItems.push({ label: 'No external IPv4 address', enabled: false });
+
+  return Menu.buildFromTemplate([
+    { label: `ViewLocal Server v${APP_VERSION}`, enabled: false },
+    { label: `Listening on ${store.get('host')}:${port}`, enabled: false },
+    { type: 'separator' },
+    { label: 'Open dashboard', click: () => shell.openExternal(serverUrl || `http://localhost:${port}/`) },
+    { label: 'Copy client URL', submenu: ipItems },
+    { label: 'Show server info…', click: () => showInfo() },
+    { label: 'Open logs folder', click: () => shell.showItemInFolder(log.transports.file.getFile().path) },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
+  ]);
+}
+
+function refreshTray() {
+  if (!tray) return;
+  tray.setToolTip(`ViewLocal Server — ${store.get('host')}:${store.get('port')}`);
+  tray.setContextMenu(buildMenu());
+}
+
+function showInfo() {
+  if (infoWin) { infoWin.show(); return; }
+  infoWin = new BrowserWindow({
+    width: 520, height: 420, resizable: false, minimizable: true, maximizable: false,
+    title: 'ViewLocal Server',
+  });
+  infoWin.setMenuBarVisibility(false);
+  const port = store.get('port');
+  const ips = getLocalIps();
+  const ipRows = ips.map((x) => `<tr><td>${x.iface}</td><td><a href="http://${x.ip}:${port}/">http://${x.ip}:${port}/</a></td></tr>`).join('');
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><title>ViewLocal Server</title>
+    <style>body{background:#1e1e1e;color:#e6edf3;font:14px -apple-system,Segoe UI,sans-serif;padding:18px}
+    h2{margin:0 0 10px;font-size:16px}table{width:100%;border-collapse:collapse;margin-top:10px}
+    td{padding:6px 8px;border-bottom:1px solid #30363d}a{color:#58a6ff;text-decoration:none}
+    .meta{color:#8b949e;margin-bottom:8px}</style></head><body>
+    <h2>ViewLocal Server v${APP_VERSION}</h2>
+    <div class="meta">Listening on <b>${store.get('host')}:${port}</b></div>
+    <h3 style="font-size:13px;color:#8b949e">Share with clients:</h3>
+    <table>${ipRows || '<tr><td colspan=2>No IPv4 found</td></tr>'}</table>
+    <p class="meta" style="margin-top:16px">Install the client on each LAN machine and use one of the above URLs as Server URL.</p>
+    </body></html>`;
+  infoWin.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(html));
+  infoWin.on('closed', () => { infoWin = null; });
+}
+
+function startExpressServer() {
+  process.env.PORT = String(store.get('port'));
+  process.env.HOST = String(store.get('host'));
+  try {
+    require('./index.js');
+    serverUrl = `http://localhost:${store.get('port')}/`;
+  } catch (e) {
+    log.error('server failed to start', e);
+    dialog.showErrorBox('Server failed to start', String(e.stack || e.message || e));
+    app.quit();
+  }
+}
+
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+
+app.whenReady().then(() => {
+  if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.server');
+  applyBootstrap();
+  setAutoLaunch(store.get('launchOnStartup'));
+  startExpressServer();
+
+  tray = new Tray(iconImage());
+  refreshTray();
+
+  const args = process.argv.slice(1);
+  if (!args.includes('--hidden') && store.get('openDashboardOnStart')) {
+    setTimeout(() => shell.openExternal(`http://localhost:${store.get('port')}/`), 800);
+  }
+});
+
+app.on('window-all-closed', (e) => { e.preventDefault(); });
