@@ -77,7 +77,7 @@ Function ViewLocalConfigShow
     StrCpy $0 "1"
 
     ; serverUrl
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.serverUrl } catch {}"`
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string](([System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8) | ConvertFrom-Json).serverUrl) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -86,7 +86,7 @@ Function ViewLocalConfigShow
     StrCpy $ServerURL $2
 
     ; captureInterval
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.captureInterval } catch {}"`
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string](([System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8) | ConvertFrom-Json).captureInterval) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -95,7 +95,7 @@ Function ViewLocalConfigShow
     StrCpy $CaptureInterval $2
 
     ; maxWidth
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.maxWidth } catch {}"`
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string](([System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8) | ConvertFrom-Json).maxWidth) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -104,7 +104,7 @@ Function ViewLocalConfigShow
     StrCpy $MaxWidth $2
 
     ; jpegQuality (handle decimal comma from Russian locale)
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.jpegQuality } catch {}"`
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string](([System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8) | ConvertFrom-Json).jpegQuality) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -114,7 +114,7 @@ Function ViewLocalConfigShow
     StrCpy $JpegQuality $2
 
     ; launchOnStartup
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.launchOnStartup } catch {}"`
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string](([System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8) | ConvertFrom-Json).launchOnStartup) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
