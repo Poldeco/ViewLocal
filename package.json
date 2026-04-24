@@ -1,0 +1,12 @@
+{
+  "name": "viewlocal-tools",
+  "private": true,
+  "description": "Repo-root tooling (icon generation, etc.) — not shipped.",
+  "scripts": {
+    "gen:icons": "node tools/gen-icons.js"
+  },
+  "devDependencies": {
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5"
+  }
+}

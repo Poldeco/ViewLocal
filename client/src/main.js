@@ -106,8 +106,13 @@ function setAutoLaunch(enabled) {
 }
 
 function iconImage() {
-  const p = path.join(__dirname, '..', 'build', 'icon.png');
-  if (fs.existsSync(p)) return nativeImage.createFromPath(p);
+  const buildDir = path.join(__dirname, '..', 'build');
+  if (process.platform === 'win32') {
+    const ico = path.join(buildDir, 'icon.ico');
+    if (fs.existsSync(ico)) return nativeImage.createFromPath(ico);
+  }
+  const png = path.join(buildDir, 'icon.png');
+  if (fs.existsSync(png)) return nativeImage.createFromPath(png);
   return nativeImage.createEmpty();
 }
 

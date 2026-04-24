@@ -1,7 +1,5 @@
 node_modules/
 dist/
-build/icon.icns
-build/icon.ico
 client/release/
 server/updates/*.yml
 server/updates/*.exe

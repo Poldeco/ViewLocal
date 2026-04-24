@@ -1,6 +1,6 @@
 {
   "name": "viewlocal-server",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "ViewLocal server — aggregates screen feeds from LAN clients and serves web UI",
   "private": true,
   "main": "src/electron-main.js",
@@ -39,6 +39,9 @@
     "files": [
       "src/**/*",
       "frontend/dist/**/*",
+      "build/icon.png",
+      "build/icon.ico",
+      "build/icon@512.png",
       "package.json",
       "!frontend/src/**/*",
       "!frontend/node_modules/**/*",
