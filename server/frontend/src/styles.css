@@ -1,0 +1,108 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
+}
+
+.app { min-height: 100%; display: flex; flex-direction: column; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: #161b22; border-bottom: 1px solid #30363d;
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+.logo { color: #58a6ff; font-size: 22px; }
+.pill {
+  padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500;
+  background: #21262d; color: #8b949e;
+}
+.pill.ok { background: #0f2a14; color: #3fb950; }
+.pill.bad { background: #2a0f0f; color: #f85149; }
+.count { color: #8b949e; font-weight: 400; font-size: 13px; }
+
+.controls { display: flex; align-items: center; gap: 12px; }
+.search {
+  background: #0d1117; color: #e6edf3; border: 1px solid #30363d;
+  padding: 6px 10px; border-radius: 6px; width: 240px; outline: none;
+}
+.search:focus { border-color: #58a6ff; }
+
+.tabs { display: inline-flex; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+.tab {
+  background: transparent; color: #8b949e; border: 0;
+  padding: 6px 14px; cursor: pointer; font-size: 13px;
+}
+.tab.active { background: #21262d; color: #e6edf3; }
+
+.empty { margin: auto; text-align: center; padding: 60px; color: #8b949e; }
+.empty h2 { color: #e6edf3; margin: 0 0 8px; }
+
+.grid {
+  display: grid; gap: 14px; padding: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.tile {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  overflow: hidden; cursor: pointer; transition: transform .12s, border-color .12s;
+  display: flex; flex-direction: column;
+}
+.tile:hover { transform: translateY(-2px); border-color: #58a6ff; }
+.tile-img {
+  display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover;
+  background: #0d1117;
+}
+.frame-empty {
+  display: flex; align-items: center; justify-content: center;
+  background: #0d1117; color: #6e7681; font-size: 13px;
+  aspect-ratio: 16 / 10;
+}
+.tile-meta { padding: 10px 12px; border-top: 1px solid #30363d; }
+.tile-title { font-weight: 600; }
+.tile-sub {
+  display: flex; gap: 10px; margin-top: 4px; color: #8b949e; font-size: 12px;
+  flex-wrap: wrap;
+}
+.tile-sub .live { color: #3fb950; }
+.tile-sub .stale { color: #d29922; }
+
+.list { width: 100%; border-collapse: collapse; margin: 14px 18px; background: #161b22;
+  border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+.list th, .list td { padding: 8px 12px; border-bottom: 1px solid #21262d; text-align: left; font-size: 13px; }
+.list th { background: #0d1117; color: #8b949e; font-weight: 500; }
+.list tr:last-child td { border-bottom: 0; }
+.list-preview { width: 140px; }
+.list-img { width: 120px; height: 68px; object-fit: cover; border-radius: 4px; background: #0d1117; }
+.list .live { color: #3fb950; } .list .stale { color: #d29922; }
+
+.btn {
+  background: #21262d; color: #e6edf3; border: 1px solid #30363d;
+  padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+}
+.btn:hover { background: #30363d; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 24px;
+}
+.modal {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  display: flex; flex-direction: column; max-width: 95vw; max-height: 95vh; overflow: hidden;
+}
+.modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px; border-bottom: 1px solid #30363d;
+}
+.modal-head .sub { color: #8b949e; font-size: 12px; margin-left: 6px; }
+.modal .close { background: transparent; border: 0; font-size: 18px; color: #8b949e; }
+.modal-body {
+  flex: 1; display: flex; align-items: center; justify-content: center; background: #0d1117;
+  padding: 8px;
+}
+.modal-img { max-width: 90vw; max-height: 80vh; object-fit: contain; display: block; }
+.modal-foot {
+  padding: 8px 16px; border-top: 1px solid #30363d; color: #8b949e; font-size: 12px;
+}

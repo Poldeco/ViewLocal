@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>ViewLocal Client — Settings</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; background: #1e1e1e; color: #e6edf3;
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; }
+    h2 { margin: 0 0 10px; font-size: 15px; }
+    .meta { color: #8b949e; font-size: 12px; margin-bottom: 14px; }
+    .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+    label { width: 150px; color: #c9d1d9; }
+    input[type=text], input[type=number] {
+      flex: 1; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+      padding: 6px 8px; border-radius: 4px; outline: none;
+    }
+    input:focus { border-color: #58a6ff; }
+    .actions { margin-top: 16px; display: flex; gap: 8px; }
+    button {
+      background: #238636; border: 0; color: white; padding: 7px 14px;
+      border-radius: 4px; cursor: pointer; font-weight: 500;
+    }
+    button.secondary { background: #30363d; }
+    button:hover { filter: brightness(1.1); }
+    .status { margin-left: auto; font-size: 12px; }
+    .ok { color: #3fb950; } .bad { color: #f85149; }
+    .small { color: #8b949e; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <h2>ViewLocal Client</h2>
+  <div class="meta" id="meta">…</div>
+
+  <div class="row">
+    <label>Server URL</label>
+    <input id="serverUrl" type="text" placeholder="http://192.168.1.10:4000" />
+  </div>
+  <div class="row">
+    <label>Interval (ms)</label>
+    <input id="captureInterval" type="number" min="200" max="10000" step="100" />
+  </div>
+  <div class="row">
+    <label>Max width (px)</label>
+    <input id="maxWidth" type="number" min="320" max="3840" step="160" />
+    <span class="small">resolution of transmitted frame</span>
+  </div>
+  <div class="row">
+    <label>JPEG quality</label>
+    <input id="jpegQuality" type="number" min="0.1" max="1" step="0.05" />
+    <span class="small">0.1 – 1.0</span>
+  </div>
+  <div class="row">
+    <label>Launch at startup</label>
+    <input id="launchOnStartup" type="checkbox" />
+  </div>
+
+  <div class="actions">
+    <button id="save">Save</button>
+    <button id="check" class="secondary">Check for updates</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function load() {
+      const s = await window.api.getSettings();
+      $('serverUrl').value = s.serverUrl || '';
+      $('captureInterval').value = s.captureInterval || 1000;
+      $('maxWidth').value = s.maxWidth || 1280;
+      $('jpegQuality').value = s.jpegQuality || 0.6;
+      $('launchOnStartup').checked = !!s.launchOnStartup;
+      $('meta').innerHTML = `
+        <b>${s.hostname}</b> · ${s.username} · ${s.os}<br>
+        version ${s.version} ·
+        <span class="${s.connected ? 'ok' : 'bad'}">${s.connected ? 'connected' : 'disconnected'}</span>
+      `;
+    }
+    async function save() {
+      const payload = {
+        serverUrl: $('serverUrl').value,
+        captureInterval: Number($('captureInterval').value),
+        maxWidth: Number($('maxWidth').value),
+        jpegQuality: Number($('jpegQuality').value),
+        launchOnStartup: $('launchOnStartup').checked,
+      };
+      await window.api.saveSettings(payload);
+      $('status').innerHTML = '<span class="ok">Saved</span>';
+      setTimeout(load, 400);
+      setTimeout(() => { $('status').textContent = ''; }, 2500);
+    }
+    async function check() {
+      $('status').textContent = 'Checking…';
+      const r = await window.api.checkUpdate();
+      $('status').innerHTML = r.ok ? '<span class="ok">Check started</span>' : `<span class="bad">${r.error}</span>`;
+      setTimeout(() => { $('status').textContent = ''; }, 4000);
+    }
+    $('save').onclick = save;
+    $('check').onclick = check;
+    load();
+    setInterval(load, 3000);
+  </script>
+</body>
+</html>
