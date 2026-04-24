@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, desktopCapturer, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, screen, desktopCapturer, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -66,7 +66,6 @@ function applyBootstrapConfig() {
   return false;
 }
 
-let tray = null;
 let settingsWin = null;
 let captureWin = null;
 let socket = null;
@@ -105,44 +104,10 @@ function setAutoLaunch(enabled) {
   }
 }
 
-function iconImage() {
-  const buildDir = path.join(__dirname, '..', 'build');
-  if (process.platform === 'win32') {
-    const ico = path.join(buildDir, 'icon.ico');
-    if (fs.existsSync(ico)) return nativeImage.createFromPath(ico);
-  }
-  const png = path.join(buildDir, 'icon.png');
-  if (fs.existsSync(png)) return nativeImage.createFromPath(png);
-  return nativeImage.createEmpty();
-}
-
-function buildTray() {
-  tray = new Tray(iconImage());
-  tray.setToolTip(`ViewLocal Client v${APP_VERSION}`);
-  refreshTrayMenu();
-}
-
-function refreshTrayMenu() {
-  if (!tray) return;
-  const serverUrl = store.get('serverUrl');
-  const connected = socket && socket.connected;
-  const menu = Menu.buildFromTemplate([
-    { label: `ViewLocal Client v${APP_VERSION}`, enabled: false },
-    { label: connected ? `● Connected: ${serverUrl}` : `○ Disconnected: ${serverUrl}`, enabled: false },
-    { type: 'separator' },
-    { label: 'Settings…', click: () => openSettings() },
-    { label: 'Check for updates', click: () => checkForUpdatesManual() },
-    { label: 'Open logs folder', click: () => shell.showItemInFolder(log.transports.file.getFile().path) },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
-  ]);
-  tray.setContextMenu(menu);
-}
-
 function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 520, height: 420, resizable: false, minimizable: true, maximizable: false,
+    width: 520, height: 440, resizable: false, minimizable: true, maximizable: false,
     title: 'ViewLocal Client — Settings',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
@@ -203,8 +168,8 @@ function connect() {
       screenHeight: screen.getPrimaryDisplay().size.height,
     },
   });
-  socket.on('connect', () => { log.info('socket connected', socket.id); refreshTrayMenu(); });
-  socket.on('disconnect', (reason) => { log.info('socket disconnected', reason); refreshTrayMenu(); });
+  socket.on('connect', () => { log.info('socket connected', socket.id); });
+  socket.on('disconnect', (reason) => { log.info('socket disconnected', reason); });
   socket.on('connect_error', (err) => { log.warn('connect_error', err.message); });
 }
 
@@ -290,7 +255,6 @@ ipcMain.handle('settings:save', (_evt, payload) => {
   }
   connect();
   startCaptureLoop();
-  refreshTrayMenu();
   return true;
 });
 
@@ -304,7 +268,6 @@ app.whenReady().then(async () => {
   applyBootstrapConfig();
   setAutoLaunch(store.get('launchOnStartup'));
   await ensureCaptureWindow();
-  buildTray();
   connect();
   startCaptureLoop();
   wireAutoUpdater();

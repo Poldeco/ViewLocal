@@ -1,8 +1,11 @@
 ; -----------------------------------------------------------------------------
 ; ViewLocal Client — custom NSIS installer script
 ; Prompts user for server URL and capture parameters.
-; On upgrade, pre-fills fields from the existing config.json that the running
-; app maintains at %APPDATA%\viewlocal-client\config.json (electron-store).
+; On upgrade, pre-fills fields by reading (in order):
+;   1. %APPDATA%\viewlocal-client\config.json   (electron-store)
+;   2. %APPDATA%\ViewLocal Client\bootstrap.json (previous installer)
+; .NET File.ReadAllText with explicit UTF-8 encoding is used so Russian /
+; non-English Windows locales don't corrupt the JSON read by PowerShell.
 ; Confirmed values are saved to
 ; %APPDATA%\ViewLocal Client\bootstrap.json and picked up by the Electron
 ; main process on first launch.
@@ -49,46 +52,80 @@ Function ViewLocalConfigShow
   StrCpy $AutostartState ${BST_CHECKED}
   StrCpy $0 "" ; upgrade flag
 
-  IfFileExists "$APPDATA\viewlocal-client\config.json" 0 cfg_done
+  ; Debug log — helps diagnose pre-fill failures on user machines.
+  FileOpen $8 "$TEMP\viewlocal-client-install.log" w
+  FileWrite $8 "ViewLocal Client installer started$\r$\n"
+  FileWrite $8 "APPDATA=$APPDATA$\r$\n"
+
+  StrCpy $3 ""
+  IfFileExists "$APPDATA\viewlocal-client\config.json" 0 check_bootstrap
+    StrCpy $3 "$APPDATA\viewlocal-client\config.json"
+    FileWrite $8 "Found config.json at $3$\r$\n"
+    Goto have_source
+
+  check_bootstrap:
+  IfFileExists "$APPDATA\ViewLocal Client\bootstrap.json" 0 no_source
+    StrCpy $3 "$APPDATA\ViewLocal Client\bootstrap.json"
+    FileWrite $8 "Found bootstrap.json at $3$\r$\n"
+    Goto have_source
+
+  no_source:
+    FileWrite $8 "No existing config/bootstrap found, using defaults$\r$\n"
+    Goto cfg_done
+
+  have_source:
     StrCpy $0 "1"
 
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).serverUrl) } catch {}"`
+    ; serverUrl
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.serverUrl } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
+    FileWrite $8 "serverUrl exit=$1 value='$2'$\r$\n"
     StrCmp $2 "" +2 0
     StrCpy $ServerURL $2
 
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).captureInterval) } catch {}"`
+    ; captureInterval
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.captureInterval } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
+    FileWrite $8 "captureInterval exit=$1 value='$2'$\r$\n"
     StrCmp $2 "" +2 0
     StrCpy $CaptureInterval $2
 
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).maxWidth) } catch {}"`
+    ; maxWidth
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.maxWidth } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
+    FileWrite $8 "maxWidth exit=$1 value='$2'$\r$\n"
     StrCmp $2 "" +2 0
     StrCpy $MaxWidth $2
 
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).jpegQuality) } catch {}"`
+    ; jpegQuality (handle decimal comma from Russian locale)
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.jpegQuality } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
     ${WordReplace} $2 "," "." "+" $2
+    FileWrite $8 "jpegQuality exit=$1 value='$2'$\r$\n"
     StrCmp $2 "" +2 0
     StrCpy $JpegQuality $2
 
-    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).launchOnStartup) } catch {}"`
+    ; launchOnStartup
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t=[System.IO.File]::ReadAllText('$3',[System.Text.Encoding]::UTF8); $c=$t|ConvertFrom-Json; [string]$c.launchOnStartup } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
+    FileWrite $8 "launchOnStartup exit=$1 value='$2'$\r$\n"
     StrCmp $2 "False" 0 +2
     StrCpy $AutostartState ${BST_UNCHECKED}
 
   cfg_done:
+
+  FileWrite $8 "Final: ServerURL=$ServerURL Interval=$CaptureInterval MaxWidth=$MaxWidth Quality=$JpegQuality Autostart=$AutostartState Upgrade=$0$\r$\n"
+  FileClose $8
 
   nsDialogs::Create 1018
   Pop $Dialog
