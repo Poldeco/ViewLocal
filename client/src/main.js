@@ -82,7 +82,10 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, argv) => {
+    // If the competing instance was a background autostart (--hidden),
+    // don't disturb: just let single-instance lock dedupe silently.
+    if (Array.isArray(argv) && argv.includes('--hidden')) return;
     if (settingsWin) {
       if (settingsWin.isMinimized()) settingsWin.restore();
       settingsWin.focus();
@@ -90,18 +93,6 @@ if (!gotLock) {
       openSettings();
     }
   });
-}
-
-function setAutoLaunch(enabled) {
-  try {
-    app.setLoginItemSettings({
-      openAtLogin: !!enabled,
-      path: process.execPath,
-      args: ['--hidden'],
-    });
-  } catch (e) {
-    log.warn('setLoginItemSettings failed', e);
-  }
 }
 
 function openSettings() {
@@ -250,7 +241,6 @@ ipcMain.handle('settings:save', (_evt, payload) => {
     if (payload.maxWidth) store.set('maxWidth', Number(payload.maxWidth));
     if (typeof payload.launchOnStartup === 'boolean') {
       store.set('launchOnStartup', payload.launchOnStartup);
-      setAutoLaunch(payload.launchOnStartup);
     }
   }
   connect();
@@ -266,7 +256,6 @@ ipcMain.handle('update:check', async () => {
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.client');
   applyBootstrapConfig();
-  setAutoLaunch(store.get('launchOnStartup'));
   await ensureCaptureWindow();
   connect();
   startCaptureLoop();
