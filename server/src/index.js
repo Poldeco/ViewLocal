@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const { spawn } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const { Server } = require('socket.io');
@@ -52,6 +53,128 @@ const io = new Server(server, {
 
 const clients = new Map();
 const latestFrames = new Map();
+const activeRecordings = new Map();
+
+const recordingsDir = process.env.VIEWLOCAL_RECORDINGS_DIR
+  || path.join(__dirname, '..', 'recordings');
+try { fs.mkdirSync(recordingsDir, { recursive: true }); } catch (_) {}
+
+function resolveFfmpegPath() {
+  try {
+    let p = require('ffmpeg-static');
+    if (p && p.includes('app.asar' + path.sep)) {
+      p = p.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+    }
+    return p;
+  } catch (_) { return null; }
+}
+
+function sanitizeName(s) {
+  return String(s || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'client';
+}
+
+function broadcastActiveRecordings() {
+  const list = Array.from(activeRecordings.values()).map((s) => ({
+    clientId: s.clientId,
+    sessionId: s.sessionId,
+    hostname: s.hostname,
+    startedAt: s.startedAt,
+    frameCount: s.frameCount,
+  }));
+  io.to('viewers').emit('recordings-active', list);
+}
+
+function startRecording(clientId) {
+  if (activeRecordings.has(clientId)) return activeRecordings.get(clientId);
+  const c = clients.get(clientId);
+  if (!c) throw new Error('client not connected');
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '');
+  const sessionId = `${stamp}_${sanitizeName(c.hostname)}`;
+  const dir = path.join(recordingsDir, `.tmp_${sessionId}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const session = {
+    sessionId,
+    clientId,
+    hostname: c.hostname,
+    dir,
+    startedAt: Date.now(),
+    frameCount: 0,
+    lastFrameAt: 0,
+  };
+  activeRecordings.set(clientId, session);
+  console.log(`[rec] start ${sessionId}`);
+  broadcastActiveRecordings();
+  return session;
+}
+
+function encodeMp4(frameDir, fps, outPath) {
+  return new Promise((resolve, reject) => {
+    const ffmpegPath = resolveFfmpegPath();
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) {
+      return reject(new Error('ffmpeg not found'));
+    }
+    const args = [
+      '-y',
+      '-framerate', String(Math.max(1, Math.min(60, fps))),
+      '-i', path.join(frameDir, 'frame-%06d.jpg'),
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-pix_fmt', 'yuv420p',
+      '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+      outPath,
+    ];
+    const proc = spawn(ffmpegPath, args, { windowsHide: true });
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
+    });
+  });
+}
+
+async function stopRecording(clientId) {
+  const session = activeRecordings.get(clientId);
+  if (!session) throw new Error('not recording');
+  activeRecordings.delete(clientId);
+  broadcastActiveRecordings();
+  console.log(`[rec] stop ${session.sessionId} frames=${session.frameCount}`);
+  if (session.frameCount === 0) {
+    try { fs.rmSync(session.dir, { recursive: true, force: true }); } catch (_) {}
+    return { ok: true, frames: 0 };
+  }
+  const durationSec = Math.max(0.001, (Date.now() - session.startedAt) / 1000);
+  const fps = Math.max(1, Math.round(session.frameCount / durationSec));
+  const outName = `${session.sessionId}.mp4`;
+  const outPath = path.join(recordingsDir, outName);
+  try {
+    await encodeMp4(session.dir, fps, outPath);
+    try { fs.rmSync(session.dir, { recursive: true, force: true }); } catch (_) {}
+    return { ok: true, frames: session.frameCount, fps, file: outName, url: `/recordings/${encodeURIComponent(outName)}` };
+  } catch (e) {
+    console.error('[rec] encode failed', e.message);
+    return { ok: false, frames: session.frameCount, error: e.message };
+  }
+}
+
+function listRecordings() {
+  try {
+    return fs.readdirSync(recordingsDir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.mp4'))
+      .map((d) => {
+        const p = path.join(recordingsDir, d.name);
+        const st = fs.statSync(p);
+        return {
+          name: d.name,
+          size: st.size,
+          mtime: st.mtimeMs,
+          url: `/recordings/${encodeURIComponent(d.name)}`,
+        };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch (_) { return []; }
+}
 
 function buildClientList() {
   return Array.from(clients.values()).map((c) => ({
@@ -105,9 +228,28 @@ clientNs.on('connection', (socket) => {
     };
     latestFrames.set(socket.id, frame);
     io.to('viewers').emit('frame', frame);
+
+    const session = activeRecordings.get(socket.id);
+    if (session && payload && payload.image) {
+      session.frameCount += 1;
+      session.lastFrameAt = c.lastFrameAt;
+      const idx = String(session.frameCount).padStart(6, '0');
+      const file = path.join(session.dir, `frame-${idx}.jpg`);
+      try {
+        const b64 = payload.image.startsWith('data:') ? payload.image.split(',').pop() : payload.image;
+        fs.writeFile(file, Buffer.from(b64, 'base64'), (err) => {
+          if (err) console.error('[rec] write failed', err.message);
+        });
+      } catch (e) {
+        console.error('[rec] frame decode failed', e.message);
+      }
+    }
   });
 
   socket.on('disconnect', () => {
+    if (activeRecordings.has(socket.id)) {
+      stopRecording(socket.id).catch((e) => console.error('[rec] auto-stop failed', e.message));
+    }
     clients.delete(socket.id);
     latestFrames.delete(socket.id);
     console.log(`[client] disconnected ${info.hostname} (${socket.id})`);
@@ -122,6 +264,10 @@ io.on('connection', (socket) => {
   for (const frame of latestFrames.values()) {
     socket.emit('frame', frame);
   }
+  socket.emit('recordings-active', Array.from(activeRecordings.values()).map((s) => ({
+    clientId: s.clientId, sessionId: s.sessionId, hostname: s.hostname,
+    startedAt: s.startedAt, frameCount: s.frameCount,
+  })));
 
   socket.on('request-frame', (clientId) => {
     const f = latestFrames.get(clientId);
@@ -130,12 +276,52 @@ io.on('connection', (socket) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, clients: clients.size, ts: Date.now() });
+  res.json({ ok: true, clients: clients.size, ts: Date.now(), ffmpeg: !!resolveFfmpegPath() });
 });
 
 app.get('/api/clients', (_req, res) => {
   res.json(buildClientList());
 });
+
+app.post('/api/recordings/:clientId/start', (req, res) => {
+  try {
+    const s = startRecording(req.params.clientId);
+    res.json({ ok: true, sessionId: s.sessionId });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/recordings/:clientId/stop', async (req, res) => {
+  try {
+    const r = await stopRecording(req.params.clientId);
+    res.json(r);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/recordings/active', (_req, res) => {
+  res.json(Array.from(activeRecordings.values()).map((s) => ({
+    clientId: s.clientId, sessionId: s.sessionId, hostname: s.hostname,
+    startedAt: s.startedAt, frameCount: s.frameCount,
+  })));
+});
+
+app.get('/api/recordings', (_req, res) => {
+  res.json(listRecordings());
+});
+
+app.delete('/api/recordings/:name', (req, res) => {
+  const name = req.params.name;
+  if (!/^[A-Za-z0-9_\-.]+\.mp4$/.test(name)) return res.status(400).json({ ok: false, error: 'bad name' });
+  const p = path.join(recordingsDir, name);
+  if (!p.startsWith(recordingsDir)) return res.status(400).json({ ok: false, error: 'bad path' });
+  try { fs.unlinkSync(p); res.json({ ok: true }); }
+  catch (e) { res.status(404).json({ ok: false, error: e.message }); }
+});
+
+app.use('/recordings', express.static(recordingsDir, { fallthrough: true, index: false }));
 
 const updatesDir = process.env.VIEWLOCAL_UPDATES_DIR
   || path.join(__dirname, '..', 'updates');
@@ -145,7 +331,7 @@ app.use('/updates', express.static(updatesDir, { fallthrough: true }));
 const uiDist = path.join(__dirname, '..', 'frontend', 'dist');
 if (fs.existsSync(uiDist)) {
   app.use(express.static(uiDist));
-  app.get(/^(?!\/api|\/updates|\/socket\.io|\/client).*/, (_req, res) => {
+  app.get(/^(?!\/api|\/updates|\/recordings|\/socket\.io|\/client).*/, (_req, res) => {
     res.sendFile(path.join(uiDist, 'index.html'));
   });
 } else {
@@ -166,7 +352,10 @@ server.on('error', (err) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`ViewLocal server listening on http://${HOST}:${PORT}`);
-  console.log(`  Web UI:      http://<this-host>:${PORT}/`);
-  console.log(`  Clients NS:  ws://<this-host>:${PORT}/client`);
-  console.log(`  Updates dir: ${updatesDir}`);
+  console.log(`  Web UI:         http://<this-host>:${PORT}/`);
+  console.log(`  Clients NS:     ws://<this-host>:${PORT}/client`);
+  console.log(`  Updates dir:    ${updatesDir}`);
+  console.log(`  Recordings dir: ${recordingsDir}`);
+  const ff = resolveFfmpegPath();
+  console.log(`  ffmpeg:         ${ff && fs.existsSync(ff) ? ff : '(not found — MP4 encoding disabled)'}`);
 });

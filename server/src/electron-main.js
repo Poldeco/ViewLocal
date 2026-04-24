@@ -107,6 +107,13 @@ function buildMenu() {
     { label: 'Open dashboard', click: () => shell.openExternal(serverUrl || `http://localhost:${port}/`) },
     { label: 'Copy client URL', submenu: ipItems },
     { label: 'Show server info…', click: () => showInfo() },
+    { label: 'Open recordings folder', click: () => {
+        try {
+          const dir = path.join(app.getPath('userData'), 'recordings');
+          try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+          shell.openPath(dir);
+        } catch (e) { log.warn('open recordings failed', e); }
+      } },
     { label: 'Open logs folder', click: () => shell.showItemInFolder(log.transports.file.getFile().path) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
@@ -148,6 +155,7 @@ function startExpressServer() {
   process.env.PORT = String(store.get('port'));
   process.env.HOST = String(store.get('host'));
   process.env.VIEWLOCAL_UPDATES_DIR = path.join(app.getPath('userData'), 'updates');
+  process.env.VIEWLOCAL_RECORDINGS_DIR = path.join(app.getPath('userData'), 'recordings');
   try {
     require('./index.js');
     serverUrl = `http://localhost:${store.get('port')}/`;
