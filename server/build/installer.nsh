@@ -1,13 +1,17 @@
 ; -----------------------------------------------------------------------------
 ; ViewLocal Server — custom NSIS installer script
 ; Prompts user for listen port and bind host (and optional auto-start).
-; Values are saved to %APPDATA%\ViewLocal Server\bootstrap.json and picked up
-; by the Electron main process on first launch.
+; On upgrade, pre-fills fields from the existing config.json that the running
+; app maintains at %APPDATA%\viewlocal-server\config.json (electron-store).
+; Values the user confirms are written to
+; %APPDATA%\ViewLocal Server\bootstrap.json and picked up by the Electron
+; main process on next launch.
 ; -----------------------------------------------------------------------------
 
 !include "MUI2.nsh"
 !include "LogicLib.nsh"
 !include "nsDialogs.nsh"
+!include "TextFunc.nsh"
 
 Var Dialog
 Var LabelPort
@@ -24,10 +28,56 @@ Var OpenDashboardState
 Var CheckAutostart
 Var AutostartState
 
+Var LabelUpgradeHint
+
 Page custom ViewLocalSrvConfigShow ViewLocalSrvConfigLeave
 
 Function ViewLocalSrvConfigShow
   !insertmacro MUI_HEADER_TEXT "ViewLocal Server — Network" "Listen address and port"
+
+  ; Defaults; will be overridden by existing config when upgrading.
+  StrCpy $Port "4000"
+  StrCpy $Host "0.0.0.0"
+  StrCpy $AutostartState ${BST_CHECKED}
+  StrCpy $OpenDashboardState ${BST_CHECKED}
+  StrCpy $0 "" ; upgrade flag
+
+  IfFileExists "$APPDATA\viewlocal-server\config.json" 0 cfg_done
+    StrCpy $0 "1"
+
+    ; port
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).port) } catch {}"'
+    Pop $1
+    Pop $2
+    ${TrimNewLines} $2 $2
+    StrCmp $2 "" +2 0
+    StrCpy $Port $2
+
+    ; host
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).host) } catch {}"'
+    Pop $1
+    Pop $2
+    ${TrimNewLines} $2 $2
+    StrCmp $2 "" +2 0
+    StrCpy $Host $2
+
+    ; launchOnStartup
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).launchOnStartup) } catch {}"'
+    Pop $1
+    Pop $2
+    ${TrimNewLines} $2 $2
+    StrCmp $2 "False" 0 +2
+    StrCpy $AutostartState ${BST_UNCHECKED}
+
+    ; openDashboardOnStart
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).openDashboardOnStart) } catch {}"'
+    Pop $1
+    Pop $2
+    ${TrimNewLines} $2 $2
+    StrCmp $2 "False" 0 +2
+    StrCpy $OpenDashboardState ${BST_UNCHECKED}
+
+  cfg_done:
 
   nsDialogs::Create 1018
   Pop $Dialog
@@ -35,23 +85,30 @@ Function ViewLocalSrvConfigShow
     Abort
   ${EndIf}
 
-  ${NSD_CreateLabel}  0 0  100% 12u "Listen port (clients and web UI will use this)"
+  ${If} $0 == "1"
+    ${NSD_CreateLabel} 0 0 100% 22u "Existing installation detected — fields are pre-filled with your current settings. Change them if needed or press Install to keep as-is."
+    Pop $LabelUpgradeHint
+    CreateFont $1 "Segoe UI" "8" "400"
+    SendMessage $LabelUpgradeHint ${WM_SETFONT} $1 0
+  ${EndIf}
+
+  ${NSD_CreateLabel}  0 28u 100% 12u "Listen port (clients and web UI will use this)"
   Pop $LabelPort
-  ${NSD_CreateNumber} 0 14u 30% 12u "4000"
+  ${NSD_CreateNumber} 0 42u 30% 12u "$Port"
   Pop $TextPort
 
-  ${NSD_CreateLabel}  0 34u 100% 12u "Bind host (0.0.0.0 = all interfaces, 127.0.0.1 = localhost only)"
+  ${NSD_CreateLabel}  0 62u 100% 12u "Bind host (0.0.0.0 = all interfaces, 127.0.0.1 = localhost only)"
   Pop $LabelHost
-  ${NSD_CreateText}   0 48u 100% 12u "0.0.0.0"
+  ${NSD_CreateText}   0 76u 100% 12u "$Host"
   Pop $TextHost
 
-  ${NSD_CreateCheckbox} 0 76u 100% 12u "Open dashboard in browser after start"
+  ${NSD_CreateCheckbox} 0 102u 100% 12u "Open dashboard in browser after start"
   Pop $CheckOpenDashboard
-  ${NSD_Check} $CheckOpenDashboard
+  ${NSD_SetState} $CheckOpenDashboard $OpenDashboardState
 
-  ${NSD_CreateCheckbox} 0 94u 100% 12u "Launch ViewLocal Server at Windows startup"
+  ${NSD_CreateCheckbox} 0 118u 100% 12u "Launch ViewLocal Server at Windows startup"
   Pop $CheckAutostart
-  ${NSD_Check} $CheckAutostart
+  ${NSD_SetState} $CheckAutostart $AutostartState
 
   nsDialogs::Show
 FunctionEnd
