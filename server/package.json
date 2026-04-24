@@ -61,7 +61,8 @@
         "owner": "Poldeco",
         "repo": "ViewLocal",
         "releaseType": "release",
-        "private": true
+        "channel": "server",
+        "private": false
       }
     ],
     "win": {

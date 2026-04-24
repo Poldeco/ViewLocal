@@ -1,6 +1,6 @@
 {
   "name": "viewlocal-client",
-  "version": "1.0.6",
+  "version": "1.0.9",
   "description": "ViewLocal client — captures local screen and streams to ViewLocal server",
   "private": true,
   "main": "src/main.js",
@@ -40,7 +40,7 @@
         "owner": "Poldeco",
         "repo": "ViewLocal",
         "releaseType": "release",
-        "private": true
+        "private": false
       }
     ],
     "win": {
