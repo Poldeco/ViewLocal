@@ -63,19 +63,36 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-    async function load() {
-      const s = await window.api.getSettings();
+    const INPUT_IDS = ['serverUrl', 'captureInterval', 'maxWidth', 'jpegQuality', 'launchOnStartup'];
+    let dirty = false;
+
+    function fillInputs(s) {
       $('serverUrl').value = s.serverUrl || '';
       $('captureInterval').value = s.captureInterval || 1000;
       $('maxWidth').value = s.maxWidth || 1280;
       $('jpegQuality').value = s.jpegQuality || 0.6;
       $('launchOnStartup').checked = !!s.launchOnStartup;
+    }
+
+    function renderMeta(s) {
       $('meta').innerHTML = `
         <b>${s.hostname}</b> · ${s.username} · ${s.os}<br>
         version ${s.version} ·
         <span class="${s.connected ? 'ok' : 'bad'}">${s.connected ? 'connected' : 'disconnected'}</span>
       `;
     }
+
+    async function initialLoad() {
+      const s = await window.api.getSettings();
+      fillInputs(s);
+      renderMeta(s);
+    }
+
+    async function refreshStatus() {
+      const s = await window.api.getSettings();
+      renderMeta(s);
+    }
+
     async function save() {
       const payload = {
         serverUrl: $('serverUrl').value,
@@ -85,20 +102,36 @@
         launchOnStartup: $('launchOnStartup').checked,
       };
       await window.api.saveSettings(payload);
+      dirty = false;
       $('status').innerHTML = '<span class="ok">Saved</span>';
-      setTimeout(load, 400);
+      setTimeout(async () => {
+        const s = await window.api.getSettings();
+        fillInputs(s);
+        renderMeta(s);
+      }, 400);
       setTimeout(() => { $('status').textContent = ''; }, 2500);
     }
+
     async function check() {
       $('status').textContent = 'Checking…';
       const r = await window.api.checkUpdate();
       $('status').innerHTML = r.ok ? '<span class="ok">Check started</span>' : `<span class="bad">${r.error}</span>`;
       setTimeout(() => { $('status').textContent = ''; }, 4000);
     }
+
+    for (const id of INPUT_IDS) {
+      const el = $(id);
+      const evt = el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(evt, () => { dirty = true; });
+    }
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+    });
+
     $('save').onclick = save;
     $('check').onclick = check;
-    load();
-    setInterval(load, 3000);
+    initialLoad();
+    setInterval(refreshStatus, 3000);
   </script>
 </body>
 </html>
