@@ -5,6 +5,21 @@ const express = require('express');
 const cors = require('cors');
 const { Server } = require('socket.io');
 
+function readJsonFlexible(p) {
+  const buf = fs.readFileSync(p);
+  let text;
+  if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) {
+    text = buf.slice(2).toString('utf16le');
+  } else if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+    text = buf.slice(3).toString('utf8');
+  } else if (buf.length >= 2 && buf.length % 2 === 0 && buf[1] === 0x00) {
+    text = buf.toString('utf16le');
+  } else {
+    text = buf.toString('utf8');
+  }
+  return JSON.parse(text);
+}
+
 function readBootstrap() {
   const candidates = [];
   if (process.env.VIEWLOCAL_CONFIG) candidates.push(process.env.VIEWLOCAL_CONFIG);
@@ -12,10 +27,7 @@ function readBootstrap() {
   candidates.push(path.join(__dirname, '..', 'bootstrap.json'));
   for (const p of candidates) {
     try {
-      if (p && fs.existsSync(p)) {
-        const raw = fs.readFileSync(p, 'utf8');
-        return JSON.parse(raw);
-      }
+      if (p && fs.existsSync(p)) return readJsonFlexible(p);
     } catch (_) {}
   }
   return {};
