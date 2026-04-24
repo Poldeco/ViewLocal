@@ -162,4 +162,16 @@ FunctionEnd
   FileWrite $9 '"launchOnStartup":$0'
   FileWrite $9 "}"
   FileClose $9
+
+  ; Startup-folder shortcut — more reliable than Run registry on locked-down
+  ; Windows installs. Paired with app.setLoginItemSettings in the Electron
+  ; main; single-instance lock dedupes if both mechanisms fire.
+  Delete "$SMSTARTUP\ViewLocal Client.lnk"
+  ${If} $AutostartState == ${BST_CHECKED}
+    CreateShortcut "$SMSTARTUP\ViewLocal Client.lnk" "$INSTDIR\ViewLocal Client.exe" "--hidden" "$INSTDIR\ViewLocal Client.exe" 0
+  ${EndIf}
+!macroend
+
+!macro customUnInstall
+  Delete "$SMSTARTUP\ViewLocal Client.lnk"
 !macroend
