@@ -142,6 +142,16 @@ if (fs.existsSync(uiDist)) {
   });
 }
 
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    const hint = `Port ${PORT} on ${HOST} is already in use. Stop the other process or change port in %APPDATA%\\ViewLocal Server\\config.json.`;
+    const e = new Error(hint);
+    e.code = 'EADDRINUSE';
+    throw e;
+  }
+  throw err;
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`ViewLocal server listening on http://${HOST}:${PORT}`);
   console.log(`  Web UI:      http://<this-host>:${PORT}/`);

@@ -137,22 +137,42 @@ function startExpressServer() {
   }
 }
 
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) app.quit();
-
-app.whenReady().then(() => {
-  if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.server');
-  applyBootstrap();
-  setAutoLaunch(store.get('launchOnStartup'));
-  startExpressServer();
-
-  tray = new Tray(iconImage());
-  refreshTray();
-
-  const args = process.argv.slice(1);
-  if (!args.includes('--hidden') && store.get('openDashboardOnStart')) {
-    setTimeout(() => shell.openExternal(`http://localhost:${store.get('port')}/`), 800);
-  }
+process.on('uncaughtException', (err) => {
+  log.error('uncaughtException', err);
+  const msg = err && err.code === 'EADDRINUSE'
+    ? `Port ${store.get('port')} on ${store.get('host')} is already in use.\n\nEdit %APPDATA%\\ViewLocal Server\\config.json to change the port, or stop the process holding it.`
+    : String(err && (err.stack || err.message) || err);
+  try { dialog.showErrorBox('ViewLocal Server error', msg); } catch (_) {}
+  app.isQuiting = true;
+  app.exit(1);
 });
 
-app.on('window-all-closed', (e) => { e.preventDefault(); });
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.exit(0);
+} else {
+  app.whenReady().then(() => {
+    if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.server');
+    applyBootstrap();
+    setAutoLaunch(store.get('launchOnStartup'));
+    startExpressServer();
+
+    tray = new Tray(iconImage());
+    refreshTray();
+
+    const args = process.argv.slice(1);
+    if (!args.includes('--hidden') && store.get('openDashboardOnStart')) {
+      const host = store.get('host');
+      const openHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
+      setTimeout(() => shell.openExternal(`http://${openHost}:${store.get('port')}/`), 800);
+    }
+  });
+
+  app.on('second-instance', () => {
+    if (tray) {
+      try { tray.displayBalloon({ title: 'ViewLocal Server', content: 'Already running — see tray icon.' }); } catch (_) {}
+    }
+  });
+
+  app.on('window-all-closed', (e) => { e.preventDefault(); });
+}
