@@ -16,3 +16,10 @@ Thumbs.db
 .vscode/
 .idea/
 coverage/
+
+# client build artifacts
+client/release/
+client/node_modules/
+
+# electron-builder cache
+client/dist/

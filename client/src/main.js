@@ -22,6 +22,30 @@ const store = new Store({
   },
 });
 
+function applyBootstrapConfig() {
+  try {
+    const candidates = [];
+    try { candidates.push(path.join(app.getPath('userData'), 'bootstrap.json')); } catch (_) {}
+    if (process.env.APPDATA) candidates.push(path.join(process.env.APPDATA, 'ViewLocal Client', 'bootstrap.json'));
+    for (const p of candidates) {
+      if (!fs.existsSync(p)) continue;
+      const raw = fs.readFileSync(p, 'utf8');
+      const bs = JSON.parse(raw);
+      log.info('applying bootstrap config from', p, bs);
+      if (bs.serverUrl) store.set('serverUrl', String(bs.serverUrl).trim());
+      if (bs.captureInterval) store.set('captureInterval', Number(bs.captureInterval));
+      if (bs.maxWidth) store.set('maxWidth', Number(bs.maxWidth));
+      if (bs.jpegQuality) store.set('jpegQuality', Number(bs.jpegQuality));
+      if (typeof bs.launchOnStartup === 'boolean') store.set('launchOnStartup', bs.launchOnStartup);
+      try { fs.unlinkSync(p); } catch (_) {}
+      return true;
+    }
+  } catch (e) {
+    log.warn('bootstrap config apply failed', e);
+  }
+  return false;
+}
+
 let tray = null;
 let settingsWin = null;
 let captureWin = null;
@@ -252,6 +276,7 @@ ipcMain.handle('update:check', async () => {
 
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.client');
+  applyBootstrapConfig();
   setAutoLaunch(store.get('launchOnStartup'));
   await ensureCaptureWindow();
   buildTray();
