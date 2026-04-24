@@ -312,6 +312,16 @@ app.get('/api/recordings', (_req, res) => {
   res.json(listRecordings());
 });
 
+app.get('/api/recordings/info', (_req, res) => {
+  const files = listRecordings();
+  res.json({
+    dir: recordingsDir,
+    count: files.length,
+    totalBytes: files.reduce((s, f) => s + f.size, 0),
+    ffmpeg: !!resolveFfmpegPath(),
+  });
+});
+
 app.delete('/api/recordings/:name', (req, res) => {
   const name = req.params.name;
   if (!/^[A-Za-z0-9_\-.]+\.mp4$/.test(name)) return res.status(400).json({ ok: false, error: 'bad name' });

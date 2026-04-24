@@ -132,6 +132,19 @@ body {
 .btn-danger:hover { background: #f85149; color: #fff; }
 
 .rec-modal { width: 900px; max-width: 95vw; height: 600px; max-height: 90vh; }
+.rec-info {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid #30363d;
+  background: #0d1117; font-size: 12px; color: #8b949e;
+}
+.rec-info-label { color: #c9d1d9; font-weight: 500; }
+.rec-info-path {
+  background: #161b22; border: 1px solid #30363d; color: #e6edf3;
+  padding: 3px 8px; border-radius: 4px; font-size: 12px;
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rec-info-meta { color: #8b949e; }
+.rec-info-hint { color: #6e7681; margin-left: auto; font-style: italic; }
 .rec-body { padding: 0; align-items: stretch; justify-content: stretch; overflow: auto; }
 .rec-list { margin: 0; border: 0; border-radius: 0; }
 .rec-list th { position: sticky; top: 0; }

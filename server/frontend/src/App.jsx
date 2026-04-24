@@ -94,6 +94,7 @@ export default function App() {
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [recordingsList, setRecordingsList] = useState([]);
   const [recordingsLoading, setRecordingsLoading] = useState(false);
+  const [recordingsInfo, setRecordingsInfo] = useState(null);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -149,9 +150,12 @@ export default function App() {
   async function loadRecordings() {
     setRecordingsLoading(true);
     try {
-      const r = await fetch('/api/recordings');
-      const j = await r.json();
-      setRecordingsList(Array.isArray(j) ? j : []);
+      const [listRes, infoRes] = await Promise.all([
+        fetch('/api/recordings').then((r) => r.json()),
+        fetch('/api/recordings/info').then((r) => r.json()).catch(() => null),
+      ]);
+      setRecordingsList(Array.isArray(listRes) ? listRes : []);
+      if (infoRes) setRecordingsInfo(infoRes);
     } catch (_) { setRecordingsList([]); }
     finally { setRecordingsLoading(false); }
   }
@@ -305,6 +309,17 @@ export default function App() {
                 <button className="btn close" onClick={() => setRecordingsOpen(false)}>✕</button>
               </div>
             </div>
+            {recordingsInfo && (
+              <div className="rec-info">
+                <span className="rec-info-label">Folder:</span>
+                <code className="rec-info-path" title={recordingsInfo.dir}>{recordingsInfo.dir}</code>
+                <span className="rec-info-meta">
+                  {recordingsInfo.count} {recordingsInfo.count === 1 ? 'file' : 'files'} · {formatBytes(recordingsInfo.totalBytes || 0)}
+                  {recordingsInfo.ffmpeg ? '' : ' · ⚠ ffmpeg missing'}
+                </span>
+                <span className="rec-info-hint">To change, use tray menu → Change recordings folder…</span>
+              </div>
+            )}
             <div className="modal-body rec-body">
               {recordingsList.length === 0 ? (
                 <div className="empty" style={{ padding: 40 }}>

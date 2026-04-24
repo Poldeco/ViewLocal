@@ -109,11 +109,12 @@ function buildMenu() {
     { label: 'Show server info…', click: () => showInfo() },
     { label: 'Open recordings folder', click: () => {
         try {
-          const dir = path.join(app.getPath('userData'), 'recordings');
+          const dir = getRecordingsDir();
           try { fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
           shell.openPath(dir);
         } catch (e) { log.warn('open recordings failed', e); }
       } },
+    { label: 'Change recordings folder…', click: () => { chooseRecordingsFolder().catch((e) => log.warn('chooseRecordingsFolder failed', e)); } },
     { label: 'Open logs folder', click: () => shell.showItemInFolder(log.transports.file.getFile().path) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuiting = true; app.quit(); } },
@@ -151,11 +152,52 @@ function showInfo() {
   infoWin.on('closed', () => { infoWin = null; });
 }
 
+function getRecordingsDir() {
+  const custom = store.get('recordingsDir');
+  if (custom) return String(custom);
+  return path.join(app.getPath('userData'), 'recordings');
+}
+
+async function chooseRecordingsFolder() {
+  const current = getRecordingsDir();
+  const r = await dialog.showOpenDialog({
+    title: 'Select recordings folder',
+    defaultPath: current,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return;
+  const next = r.filePaths[0];
+  if (path.resolve(next) === path.resolve(current)) return;
+  try {
+    fs.mkdirSync(next, { recursive: true });
+    fs.accessSync(next, fs.constants.W_OK);
+  } catch (e) {
+    dialog.showErrorBox('Cannot use folder', `${next}\n\n${e.message || e}`);
+    return;
+  }
+  store.set('recordingsDir', next);
+  log.info('recordingsDir changed to', next);
+  refreshTray();
+  const ans = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Restart now', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+    message: 'Recordings folder updated',
+    detail: `New folder:\n${next}\n\nA restart is required for the change to take effect.`,
+  });
+  if (ans.response === 0) {
+    app.isQuiting = true;
+    app.relaunch();
+    app.exit(0);
+  }
+}
+
 function startExpressServer() {
   process.env.PORT = String(store.get('port'));
   process.env.HOST = String(store.get('host'));
   process.env.VIEWLOCAL_UPDATES_DIR = path.join(app.getPath('userData'), 'updates');
-  process.env.VIEWLOCAL_RECORDINGS_DIR = path.join(app.getPath('userData'), 'recordings');
+  process.env.VIEWLOCAL_RECORDINGS_DIR = getRecordingsDir();
   try {
     require('./index.js');
     serverUrl = `http://localhost:${store.get('port')}/`;
