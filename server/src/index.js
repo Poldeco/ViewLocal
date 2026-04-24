@@ -125,7 +125,8 @@ app.get('/api/clients', (_req, res) => {
   res.json(buildClientList());
 });
 
-const updatesDir = path.join(__dirname, '..', 'updates');
+const updatesDir = process.env.VIEWLOCAL_UPDATES_DIR
+  || path.join(__dirname, '..', 'updates');
 if (!fs.existsSync(updatesDir)) fs.mkdirSync(updatesDir, { recursive: true });
 app.use('/updates', express.static(updatesDir, { fallthrough: true }));
 

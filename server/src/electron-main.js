@@ -126,6 +126,7 @@ function showInfo() {
 function startExpressServer() {
   process.env.PORT = String(store.get('port'));
   process.env.HOST = String(store.get('host'));
+  process.env.VIEWLOCAL_UPDATES_DIR = path.join(app.getPath('userData'), 'updates');
   try {
     require('./index.js');
     serverUrl = `http://localhost:${store.get('port')}/`;
