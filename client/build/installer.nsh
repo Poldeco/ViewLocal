@@ -52,28 +52,28 @@ Function ViewLocalConfigShow
   IfFileExists "$APPDATA\viewlocal-client\config.json" 0 cfg_done
     StrCpy $0 "1"
 
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-client\config.json'' | ConvertFrom-Json).serverUrl) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).serverUrl) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
     StrCmp $2 "" +2 0
     StrCpy $ServerURL $2
 
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-client\config.json'' | ConvertFrom-Json).captureInterval) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).captureInterval) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
     StrCmp $2 "" +2 0
     StrCpy $CaptureInterval $2
 
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-client\config.json'' | ConvertFrom-Json).maxWidth) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).maxWidth) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
     StrCmp $2 "" +2 0
     StrCpy $MaxWidth $2
 
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-client\config.json'' | ConvertFrom-Json).jpegQuality) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).jpegQuality) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -81,7 +81,7 @@ Function ViewLocalConfigShow
     StrCmp $2 "" +2 0
     StrCpy $JpegQuality $2
 
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-client\config.json'' | ConvertFrom-Json).launchOnStartup) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-client\config.json' | ConvertFrom-Json).launchOnStartup) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2

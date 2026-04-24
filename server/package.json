@@ -1,6 +1,6 @@
 {
   "name": "viewlocal-server",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "ViewLocal server — aggregates screen feeds from LAN clients and serves web UI",
   "private": true,
   "main": "src/electron-main.js",

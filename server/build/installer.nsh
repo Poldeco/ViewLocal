@@ -46,7 +46,7 @@ Function ViewLocalSrvConfigShow
     StrCpy $0 "1"
 
     ; port
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).port) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-server\config.json' | ConvertFrom-Json).port) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -54,7 +54,7 @@ Function ViewLocalSrvConfigShow
     StrCpy $Port $2
 
     ; host
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).host) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-server\config.json' | ConvertFrom-Json).host) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -62,7 +62,7 @@ Function ViewLocalSrvConfigShow
     StrCpy $Host $2
 
     ; launchOnStartup
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).launchOnStartup) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-server\config.json' | ConvertFrom-Json).launchOnStartup) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2
@@ -70,7 +70,7 @@ Function ViewLocalSrvConfigShow
     StrCpy $AutostartState ${BST_UNCHECKED}
 
     ; openDashboardOnStart
-    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath ''$APPDATA\viewlocal-server\config.json'' | ConvertFrom-Json).openDashboardOnStart) } catch {}"'
+    nsExec::ExecToStack `powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [string]((Get-Content -Raw -LiteralPath '$APPDATA\viewlocal-server\config.json' | ConvertFrom-Json).openDashboardOnStart) } catch {}"`
     Pop $1
     Pop $2
     ${TrimNewLines} $2 $2

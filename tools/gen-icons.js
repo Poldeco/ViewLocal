@@ -13,7 +13,7 @@ const TARGETS = [
   { name: 'server', svg: 'server/build/icon.svg', out: 'server/build' },
 ];
 
-const PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512];
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
 async function renderPng(svgPath, size) {
   const svg = fs.readFileSync(svgPath);
@@ -37,10 +37,11 @@ async function buildFor({ name, svg, out }) {
   console.log(`[${name}] wrote icon.png (256x256)`);
 
   // Multi-size ICO for Windows installer + app icon.
-  const pngs = await Promise.all(PNG_SIZES.map((s) => renderPng(svgPath, s)));
+  // Cap at 256 — larger frames are non-standard and break some tooling.
+  const pngs = await Promise.all(ICO_SIZES.map((s) => renderPng(svgPath, s)));
   const ico = await pngToIco(pngs);
   fs.writeFileSync(path.join(out, 'icon.ico'), ico);
-  console.log(`[${name}] wrote icon.ico (${PNG_SIZES.join(',')})`);
+  console.log(`[${name}] wrote icon.ico (${ICO_SIZES.join(',')})`);
 
   // 512x512 PNG for Linux AppImage and macOS fallback.
   const big = await renderPng(svgPath, 512);
