@@ -200,9 +200,16 @@ FunctionEnd
   FileWrite $9 "}"
   FileClose $9
 
-  ; Startup-folder shortcut — more reliable than Run registry on locked-down
-  ; Windows installs. Paired with app.setLoginItemSettings in the Electron
-  ; main; single-instance lock dedupes if both mechanisms fire.
+  ; Legacy autostart cleanup: older builds (<=1.0.11) also wrote to
+  ; HKCU\...\Run via Electron's setLoginItemSettings. That path is
+  ; deprecated now (we rely exclusively on the Startup-folder shortcut
+  ; to avoid the second-instance race on login). Remove any leftover
+  ; entries so reboots don't re-trigger the old mechanism.
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "viewlocal-client"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.poldeco.viewlocal.client"
+
+  ; Startup-folder shortcut — the single source of truth for client autostart.
   Delete "$SMSTARTUP\ViewLocal Client.lnk"
   ${If} $AutostartState == ${BST_CHECKED}
     CreateShortcut "$SMSTARTUP\ViewLocal Client.lnk" "$INSTDIR\ViewLocal Client.exe" "--hidden" "$INSTDIR\ViewLocal Client.exe" 0
@@ -211,4 +218,7 @@ FunctionEnd
 
 !macro customUnInstall
   Delete "$SMSTARTUP\ViewLocal Client.lnk"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "viewlocal-client"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.poldeco.viewlocal.client"
 !macroend
