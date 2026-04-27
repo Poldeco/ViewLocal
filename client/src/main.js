@@ -14,7 +14,7 @@ autoUpdater.autoInstallOnAppQuit = true;
 
 const store = new Store({
   defaults: {
-    serverUrl: process.env.VIEWLOCAL_SERVER || 'http://192.168.1.10:4000',
+    serverUrl: process.env.VIEWLOCAL_SERVER || 'http://192.168.0.9:4000',
     captureInterval: 1000,
     jpegQuality: 0.6,
     maxWidth: 1280,

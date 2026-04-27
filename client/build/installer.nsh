@@ -45,7 +45,7 @@ Function ViewLocalConfigShow
   !insertmacro MUI_HEADER_TEXT "ViewLocal Client — Connection" "Server address and capture parameters"
 
   ; Defaults; will be overridden by existing config when upgrading.
-  StrCpy $ServerURL "http://192.168.1.10:4000"
+  StrCpy $ServerURL "http://192.168.0.9:4000"
   StrCpy $CaptureInterval "1000"
   StrCpy $MaxWidth "1280"
   StrCpy $JpegQuality "0.6"
