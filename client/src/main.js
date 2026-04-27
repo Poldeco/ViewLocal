@@ -9,8 +9,8 @@ const { autoUpdater } = require('electron-updater');
 
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 const store = new Store({
   defaults: {
@@ -190,34 +190,65 @@ function startCaptureLoop() {
   }, interval);
 }
 
+// Manual-only update flow. Triggered exclusively from the settings window.
+// No background polling, no auto-download, no auto-install. The user sees the
+// available version, confirms in a dialog, then we download + install on quit.
+let pendingUpdateInfo = null;
+
+function wireAutoUpdater() {
+  autoUpdater.on('error', (err) => log.error('updater error', err));
+  autoUpdater.on('update-available', (info) => log.info('update-available', info && info.version));
+  autoUpdater.on('update-not-available', () => log.info('update-not-available'));
+  autoUpdater.on('download-progress', (p) => log.info(`download ${Math.round(p.percent)}%`));
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info('update-downloaded', info && info.version);
+    dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart and install', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Update downloaded',
+      detail: `Version ${info && info.version} is ready. Restart now to apply?`,
+    }).then((r) => {
+      if (r.response === 0) {
+        setImmediate(() => autoUpdater.quitAndInstall(false, true));
+      }
+    });
+  });
+}
+
 async function checkForUpdatesManual() {
   try {
     const res = await autoUpdater.checkForUpdates();
-    if (!res || !res.updateInfo) {
-      dialog.showMessageBox({ type: 'info', message: 'Up to date', detail: `Current version: ${APP_VERSION}` });
+    const info = res && res.updateInfo;
+    if (!info || info.version === APP_VERSION) {
+      await dialog.showMessageBox({
+        type: 'info',
+        message: 'Up to date',
+        detail: `Current version: ${APP_VERSION}`,
+      });
+      return { ok: true, upToDate: true };
     }
+    pendingUpdateInfo = info;
+    const ans = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Download and install', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      message: 'Update available',
+      detail: `New version: ${info.version}\nCurrent: ${APP_VERSION}\n\nDownload now? You'll be asked again before the app restarts to install.`,
+    });
+    if (ans.response !== 0) return { ok: true, declined: true };
+    autoUpdater.downloadUpdate().catch((e) => {
+      log.error('downloadUpdate failed', e);
+      dialog.showErrorBox('Download failed', String(e && (e.stack || e.message) || e));
+    });
+    return { ok: true, downloading: true, version: info.version };
   } catch (e) {
-    dialog.showMessageBox({ type: 'error', message: 'Update check failed', detail: String(e.message || e) });
+    log.warn('checkForUpdates failed', e);
+    dialog.showMessageBox({ type: 'error', message: 'Update check failed', detail: String(e && (e.message || e)) });
+    return { ok: false, error: String(e && (e.message || e)) };
   }
-}
-
-function wireAutoUpdater() {
-  autoUpdater.on('update-available', (info) => {
-    log.info('update-available', info.version);
-  });
-  autoUpdater.on('update-not-available', () => log.info('update-not-available'));
-  autoUpdater.on('error', (err) => log.error('updater error', err));
-  autoUpdater.on('download-progress', (p) => log.info(`download ${Math.round(p.percent)}%`));
-  autoUpdater.on('update-downloaded', (info) => {
-    log.info('update-downloaded', info.version);
-    setTimeout(() => autoUpdater.quitAndInstall(false, true), 3000);
-  });
-  setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify().catch((e) => log.warn('auto check failed', e.message));
-  }, 30 * 60 * 1000);
-  setTimeout(() => {
-    autoUpdater.checkForUpdatesAndNotify().catch((e) => log.warn('initial check failed', e.message));
-  }, 15 * 1000);
 }
 
 ipcMain.handle('settings:get', () => ({
@@ -248,10 +279,7 @@ ipcMain.handle('settings:save', (_evt, payload) => {
   return true;
 });
 
-ipcMain.handle('update:check', async () => {
-  try { await autoUpdater.checkForUpdates(); return { ok: true }; }
-  catch (e) { return { ok: false, error: String(e.message || e) }; }
-});
+ipcMain.handle('update:check', () => checkForUpdatesManual());
 
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.client');
