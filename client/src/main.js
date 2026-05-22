@@ -78,14 +78,21 @@ const HOSTNAME = os.hostname();
 const USERNAME = os.userInfo().username;
 const OS_LABEL = `${os.platform()} ${os.release()}`;
 
+const HIDDEN_FLAGS = new Set(['--hidden', '/hidden', '/h']);
+function isHiddenLaunch(argv) {
+  if (!Array.isArray(argv)) return false;
+  return argv.some((a) => typeof a === 'string' && HIDDEN_FLAGS.has(a.toLowerCase()));
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    // If the competing instance was a background autostart (--hidden),
-    // don't disturb: just let single-instance lock dedupe silently.
-    if (Array.isArray(argv) && argv.includes('--hidden')) return;
+    // If the competing instance was a background autostart, don't disturb:
+    // both autostart channels (Startup-folder shortcut and HKCU\...\Run)
+    // pass a hidden flag, so single-instance lock can dedupe silently.
+    if (isHiddenLaunch(argv)) return;
     if (settingsWin) {
       if (settingsWin.isMinimized()) settingsWin.restore();
       settingsWin.focus();
@@ -288,8 +295,7 @@ app.whenReady().then(async () => {
   connect();
   startCaptureLoop();
   wireAutoUpdater();
-  const args = process.argv.slice(1);
-  if (!args.includes('--hidden')) {
+  if (!isHiddenLaunch(process.argv.slice(1))) {
     setTimeout(() => openSettings(), 500);
   }
 });

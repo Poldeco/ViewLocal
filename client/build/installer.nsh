@@ -200,19 +200,20 @@ FunctionEnd
   FileWrite $9 "}"
   FileClose $9
 
-  ; Legacy autostart cleanup: older builds (<=1.0.11) also wrote to
-  ; HKCU\...\Run via Electron's setLoginItemSettings. That path is
-  ; deprecated now (we rely exclusively on the Startup-folder shortcut
-  ; to avoid the second-instance race on login). Remove any leftover
-  ; entries so reboots don't re-trigger the old mechanism.
+  ; Drop legacy registry value names from old builds so we don't have stale
+  ; duplicates pointing to previous install paths after an upgrade.
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "viewlocal-client"
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.poldeco.viewlocal.client"
 
-  ; Startup-folder shortcut — the single source of truth for client autostart.
+  ; Dual-channel autostart: Startup-folder shortcut AND HKCU\...\Run, both
+  ; with --hidden so the client never shows the settings window on login.
+  ; The main process's second-instance handler treats any hidden-flag launch
+  ; as a no-op, so if both channels fire the duplicate is silently dropped.
   Delete "$SMSTARTUP\ViewLocal Client.lnk"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
   ${If} $AutostartState == ${BST_CHECKED}
     CreateShortcut "$SMSTARTUP\ViewLocal Client.lnk" "$INSTDIR\ViewLocal Client.exe" "--hidden" "$INSTDIR\ViewLocal Client.exe" 0
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client" '"$INSTDIR\ViewLocal Client.exe" --hidden'
   ${EndIf}
 !macroend
 
