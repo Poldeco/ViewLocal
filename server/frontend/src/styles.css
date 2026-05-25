@@ -119,6 +119,17 @@ body {
 }
 @keyframes rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: .55 } }
 
+.display-badge {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(13,17,23,.85); color: #58a6ff; font-size: 11px; font-weight: 600;
+  padding: 3px 7px; border-radius: 4px; letter-spacing: .5px;
+  border: 1px solid #30363d;
+}
+.tile-rec .display-badge { top: 36px; }
+
+.display-switch { display: inline-flex; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; }
+.display-switch .tab { padding: 4px 10px; font-size: 12px; }
+
 .pill.rec-pill { background: #2a0f0f; color: #f85149; animation: rec-pulse 1.4s infinite; }
 
 .btn-rec { background: #21262d; color: #f85149; border-color: #f85149; }

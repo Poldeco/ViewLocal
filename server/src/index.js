@@ -176,6 +176,10 @@ function listRecordings() {
   } catch (_) { return []; }
 }
 
+function frameKey(clientId, displayIndex) {
+  return `${clientId}::${displayIndex || 0}`;
+}
+
 function buildClientList() {
   return Array.from(clients.values()).map((c) => ({
     id: c.id,
@@ -187,11 +191,23 @@ function buildClientList() {
     lastFrameAt: c.lastFrameAt,
     screenWidth: c.screenWidth,
     screenHeight: c.screenHeight,
+    displays: c.displays || [{ index: 0, primary: true, width: c.screenWidth, height: c.screenHeight, label: 'Display 1' }],
   }));
 }
 
 function broadcastClientList() {
   io.to('viewers').emit('clients', buildClientList());
+}
+
+function normalizeDisplays(raw) {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  return raw.map((d, i) => ({
+    index: typeof d.index === 'number' ? d.index : i,
+    width: Number(d.width) || 0,
+    height: Number(d.height) || 0,
+    primary: !!d.primary,
+    label: String(d.label || `Display ${(typeof d.index === 'number' ? d.index : i) + 1}`),
+  }));
 }
 
 const clientNs = io.of('/client');
@@ -205,32 +221,48 @@ clientNs.on('connection', (socket) => {
     version: meta.version || '',
     screenWidth: meta.screenWidth || 0,
     screenHeight: meta.screenHeight || 0,
+    displays: normalizeDisplays(meta.displays),
     connectedAt: Date.now(),
     lastFrameAt: 0,
   };
   clients.set(socket.id, info);
-  console.log(`[client] connected ${info.hostname} (${socket.id})`);
+  console.log(`[client] connected ${info.hostname} (${socket.id}) displays=${(info.displays || []).length || 1}`);
   broadcastClientList();
+
+  socket.on('displays', (payload) => {
+    const c = clients.get(socket.id);
+    if (!c) return;
+    const ds = normalizeDisplays(payload);
+    if (!ds) return;
+    c.displays = ds;
+    broadcastClientList();
+  });
 
   socket.on('frame', (payload) => {
     const c = clients.get(socket.id);
     if (!c) return;
     c.lastFrameAt = Date.now();
-    if (payload && payload.width) c.screenWidth = payload.width;
-    if (payload && payload.height) c.screenHeight = payload.height;
+    const displayIndex = typeof payload.displayIndex === 'number' ? payload.displayIndex : 0;
+    if (displayIndex === 0 && payload && payload.width) c.screenWidth = payload.width;
+    if (displayIndex === 0 && payload && payload.height) c.screenHeight = payload.height;
     const frame = {
       id: socket.id,
       hostname: c.hostname,
+      displayIndex,
+      displayId: payload.displayId,
+      displayLabel: payload.displayLabel,
+      primary: !!payload.primary,
       width: payload.width,
       height: payload.height,
       image: payload.image,
       ts: c.lastFrameAt,
     };
-    latestFrames.set(socket.id, frame);
+    latestFrames.set(frameKey(socket.id, displayIndex), frame);
     io.to('viewers').emit('frame', frame);
 
+    // Recordings capture the primary monitor only — keeps storage and UX simple.
     const session = activeRecordings.get(socket.id);
-    if (session && payload && payload.image) {
+    if (session && payload && payload.image && displayIndex === 0) {
       session.frameCount += 1;
       session.lastFrameAt = c.lastFrameAt;
       const idx = String(session.frameCount).padStart(6, '0');
@@ -251,7 +283,9 @@ clientNs.on('connection', (socket) => {
       stopRecording(socket.id).catch((e) => console.error('[rec] auto-stop failed', e.message));
     }
     clients.delete(socket.id);
-    latestFrames.delete(socket.id);
+    for (const k of Array.from(latestFrames.keys())) {
+      if (k.startsWith(`${socket.id}::`)) latestFrames.delete(k);
+    }
     console.log(`[client] disconnected ${info.hostname} (${socket.id})`);
     io.to('viewers').emit('client-gone', socket.id);
     broadcastClientList();
@@ -269,8 +303,16 @@ io.on('connection', (socket) => {
     startedAt: s.startedAt, frameCount: s.frameCount,
   })));
 
-  socket.on('request-frame', (clientId) => {
-    const f = latestFrames.get(clientId);
+  socket.on('request-frame', (payload) => {
+    if (typeof payload === 'string') {
+      const f = latestFrames.get(frameKey(payload, 0));
+      if (f) socket.emit('frame', f);
+      return;
+    }
+    const id = payload && payload.clientId;
+    const di = payload && typeof payload.displayIndex === 'number' ? payload.displayIndex : 0;
+    if (!id) return;
+    const f = latestFrames.get(frameKey(id, di));
     if (f) socket.emit('frame', f);
   });
 });

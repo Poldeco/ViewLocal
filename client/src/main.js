@@ -127,24 +127,52 @@ async function ensureCaptureWindow() {
   return captureWin;
 }
 
-async function captureFrame() {
-  const primary = screen.getPrimaryDisplay();
+function listDisplays() {
+  const primaryId = screen.getPrimaryDisplay().id;
+  return screen.getAllDisplays().map((d, index) => ({
+    index,
+    id: String(d.id),
+    width: d.size.width,
+    height: d.size.height,
+    primary: d.id === primaryId,
+    label: d.label || `Display ${index + 1}`,
+  }));
+}
+
+async function captureAllFrames() {
+  const displays = screen.getAllDisplays();
+  if (!displays.length) return [];
   const targetMaxW = store.get('maxWidth', 1280);
-  const scale = Math.min(1, targetMaxW / primary.size.width);
-  const w = Math.round(primary.size.width * scale);
-  const h = Math.round(primary.size.height * scale);
+  // height: 99999 is the canonical way to tell desktopCapturer "fit by width,
+  // preserve aspect ratio per source" — each monitor returns at its own ratio.
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: { width: w, height: h },
+    thumbnailSize: { width: targetMaxW, height: 99999 },
     fetchWindowIcons: false,
   });
-  if (!sources.length) return null;
-  const src = sources.find((s) => s.display_id === String(primary.id)) || sources[0];
-  const img = src.thumbnail;
-  if (img.isEmpty()) return null;
-  const quality = Math.round((store.get('jpegQuality', 0.6)) * 100);
-  const jpg = img.toJPEG(Math.max(10, Math.min(100, quality)));
-  return { buffer: jpg, width: img.getSize().width, height: img.getSize().height };
+  if (!sources.length) return [];
+  const quality = Math.max(10, Math.min(100, Math.round((store.get('jpegQuality', 0.6)) * 100)));
+  const primaryId = screen.getPrimaryDisplay().id;
+  const frames = [];
+  for (let i = 0; i < displays.length; i++) {
+    const d = displays[i];
+    const src = sources.find((s) => s.display_id === String(d.id))
+      || (displays.length === 1 ? sources[0] : null);
+    if (!src) continue;
+    const img = src.thumbnail;
+    if (img.isEmpty()) continue;
+    const size = img.getSize();
+    frames.push({
+      displayIndex: i,
+      displayId: String(d.id),
+      displayLabel: d.label || `Display ${i + 1}`,
+      primary: d.id === primaryId,
+      buffer: img.toJPEG(quality),
+      width: size.width,
+      height: size.height,
+    });
+  }
+  return frames;
 }
 
 function connect() {
@@ -152,6 +180,7 @@ function connect() {
   if (!url) return;
   if (socket) { try { socket.close(); } catch (_) {} socket = null; }
   log.info('Connecting to', url);
+  const primary = screen.getPrimaryDisplay();
   socket = io(`${url.replace(/\/$/, '')}/client`, {
     transports: ['websocket'],
     reconnection: true,
@@ -162,14 +191,17 @@ function connect() {
       username: USERNAME,
       os: OS_LABEL,
       version: APP_VERSION,
-      screenWidth: screen.getPrimaryDisplay().size.width,
-      screenHeight: screen.getPrimaryDisplay().size.height,
+      screenWidth: primary.size.width,
+      screenHeight: primary.size.height,
+      displays: listDisplays(),
     },
   });
   socket.on('connect', () => { log.info('socket connected', socket.id); });
   socket.on('disconnect', (reason) => { log.info('socket disconnected', reason); });
   socket.on('connect_error', (err) => { log.warn('connect_error', err.message); });
 }
+
+let lastDisplaysSig = '';
 
 function startCaptureLoop() {
   if (captureTimer) clearInterval(captureTimer);
@@ -179,16 +211,29 @@ function startCaptureLoop() {
     if (!socket || !socket.connected) return;
     isCapturing = true;
     try {
-      const frame = await captureFrame();
-      if (!frame) return;
-      const b64 = frame.buffer.toString('base64');
-      socket.emit('frame', {
-        image: b64,
-        width: frame.width,
-        height: frame.height,
-        ts: Date.now(),
-      });
-      lastSentAt = Date.now();
+      // Re-broadcast display topology if it changed (monitor plugged/unplugged).
+      const displays = listDisplays();
+      const sig = JSON.stringify(displays);
+      if (sig !== lastDisplaysSig) {
+        lastDisplaysSig = sig;
+        socket.emit('displays', displays);
+      }
+      const frames = await captureAllFrames();
+      if (!frames.length) return;
+      const ts = Date.now();
+      for (const frame of frames) {
+        socket.emit('frame', {
+          image: frame.buffer.toString('base64'),
+          width: frame.width,
+          height: frame.height,
+          displayIndex: frame.displayIndex,
+          displayId: frame.displayId,
+          displayLabel: frame.displayLabel,
+          primary: frame.primary,
+          ts,
+        });
+      }
+      lastSentAt = ts;
     } catch (e) {
       log.error('capture failed', e);
     } finally {

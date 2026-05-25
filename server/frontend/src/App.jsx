@@ -3,6 +3,10 @@ import { io } from 'socket.io-client';
 
 const socketUrl = window.location.origin;
 
+function frameKey(clientId, displayIndex) {
+  return `${clientId}::${displayIndex || 0}`;
+}
+
 function useSocket() {
   const [clients, setClients] = useState([]);
   const [frames, setFrames] = useState({});
@@ -15,12 +19,14 @@ function useSocket() {
     socket.on('disconnect', () => setConnected(false));
     socket.on('clients', (list) => setClients(list));
     socket.on('frame', (f) => {
-      setFrames((prev) => ({ ...prev, [f.id]: f }));
+      setFrames((prev) => ({ ...prev, [frameKey(f.id, f.displayIndex)]: f }));
     });
     socket.on('client-gone', (id) => {
       setFrames((prev) => {
         const next = { ...prev };
-        delete next[id];
+        for (const k of Object.keys(next)) {
+          if (k.startsWith(`${id}::`)) delete next[k];
+        }
         return next;
       });
       setActiveRecordings((prev) => {
@@ -90,6 +96,7 @@ export default function App() {
   const [view, setView] = useState('tiles');
   const [filter, setFilter] = useState('');
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedDisplay, setSelectedDisplay] = useState(0);
   const [tick, setTick] = useState(0);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
   const [recordingsList, setRecordingsList] = useState([]);
@@ -102,7 +109,7 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  const filtered = useMemo(() => {
+  const filteredClients = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return clients;
     return clients.filter((c) =>
@@ -110,9 +117,35 @@ export default function App() {
     );
   }, [clients, filter]);
 
+  // Flat list of streams: one entry per (client × display). Drives the tiles grid.
+  const streams = useMemo(() => {
+    const out = [];
+    for (const c of filteredClients) {
+      const displays = (c.displays && c.displays.length) ? c.displays : [{ index: 0, primary: true, label: 'Display 1' }];
+      for (const d of displays) {
+        out.push({
+          key: frameKey(c.id, d.index),
+          clientId: c.id,
+          client: c,
+          display: d,
+          multi: displays.length > 1,
+        });
+      }
+    }
+    return out;
+  }, [filteredClients]);
+
   const selected = selectedId ? clients.find((c) => c.id === selectedId) : null;
-  const selectedFrame = selectedId ? frames[selectedId] : null;
+  const selectedDisplays = (selected && selected.displays && selected.displays.length)
+    ? selected.displays
+    : (selected ? [{ index: 0, primary: true, label: 'Display 1' }] : []);
+  const selectedFrame = selected ? frames[frameKey(selected.id, selectedDisplay)] : null;
   const selectedRec = selectedId ? activeRecordings[selectedId] : null;
+
+  function openClient(clientId, displayIndex = 0) {
+    setSelectedId(clientId);
+    setSelectedDisplay(displayIndex || 0);
+  }
 
   useEffect(() => {
     const onKey = (e) => {
@@ -205,18 +238,27 @@ export default function App() {
 
       {view === 'tiles' && clients.length > 0 && (
         <div className="grid">
-          {filtered.map((c) => {
-            const f = frames[c.id];
-            const rec = activeRecordings[c.id];
+          {streams.map((s) => {
+            const f = frames[s.key];
+            const rec = activeRecordings[s.clientId];
+            const title = s.multi
+              ? `${s.client.hostname} · ${s.display.label || `Monitor ${s.display.index + 1}`}`
+              : s.client.hostname;
+            const recOnThis = rec && s.display.index === 0;
             return (
-              <div key={c.id} className={`tile ${rec ? 'tile-rec' : ''}`} onClick={() => setSelectedId(c.id)}>
+              <div
+                key={s.key}
+                className={`tile ${recOnThis ? 'tile-rec' : ''}`}
+                onClick={() => openClient(s.clientId, s.display.index)}
+              >
                 <FrameImg frame={f} className="tile-img" />
-                {rec && <div className="rec-badge">⏺ REC</div>}
+                {recOnThis && <div className="rec-badge">⏺ REC</div>}
+                {s.multi && <div className="display-badge">M{s.display.index + 1}</div>}
                 <div className="tile-meta">
-                  <div className="tile-title">{c.hostname}</div>
+                  <div className="tile-title">{title}</div>
                   <div className="tile-sub">
-                    {c.username && <span>{c.username}</span>}
-                    <span>{c.os}</span>
+                    {s.client.username && <span>{s.client.username}</span>}
+                    <span>{s.client.os}</span>
                     <span className={f && Date.now() - f.ts < 3000 ? 'live' : 'stale'}>{formatAgo(f?.ts)}</span>
                   </div>
                 </div>
@@ -235,6 +277,7 @@ export default function App() {
               <th>User</th>
               <th>OS</th>
               <th>Resolution</th>
+              <th>Monitors</th>
               <th>Version</th>
               <th>Last frame</th>
               <th>Record</th>
@@ -242,9 +285,10 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => {
-              const f = frames[c.id];
+            {filteredClients.map((c) => {
+              const f = frames[frameKey(c.id, 0)];
               const rec = activeRecordings[c.id];
+              const dispCount = (c.displays && c.displays.length) || 1;
               return (
                 <tr key={c.id}>
                   <td className="list-preview">
@@ -254,6 +298,7 @@ export default function App() {
                   <td>{c.username || '—'}</td>
                   <td>{c.os || '—'}</td>
                   <td>{c.screenWidth && c.screenHeight ? `${c.screenWidth}×${c.screenHeight}` : '—'}</td>
+                  <td>{dispCount > 1 ? `${dispCount} monitors` : '1'}</td>
                   <td>{c.version || '—'}</td>
                   <td className={f && Date.now() - f.ts < 3000 ? 'live' : 'stale'}>{formatAgo(f?.ts)}</td>
                   <td>
@@ -262,7 +307,7 @@ export default function App() {
                     </button>
                   </td>
                   <td>
-                    <button className="btn" onClick={() => setSelectedId(c.id)}>View</button>
+                    <button className="btn" onClick={() => openClient(c.id, 0)}>View</button>
                   </td>
                 </tr>
               );
@@ -280,9 +325,24 @@ export default function App() {
                 <span className="sub">  {selected.username || ''}  {selected.os}  ·  v{selected.version || '?'}  ·  {selected.screenWidth}×{selected.screenHeight}</span>
               </div>
               <div className="modal-head-actions">
+                {selectedDisplays.length > 1 && (
+                  <div className="display-switch">
+                    {selectedDisplays.map((d) => (
+                      <button
+                        key={d.index}
+                        className={`tab ${d.index === selectedDisplay ? 'active' : ''}`}
+                        onClick={() => setSelectedDisplay(d.index)}
+                        title={d.label || `Monitor ${d.index + 1}`}
+                      >
+                        M{d.index + 1}{d.primary ? '★' : ''}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   className={`btn ${selectedRec ? 'btn-rec-active' : 'btn-rec'}`}
                   onClick={() => toggleRecord(selected.id)}
+                  title={selectedDisplays.length > 1 ? 'Records primary monitor only' : ''}
                 >
                   {selectedRec
                     ? `⏺ Stop recording (${selectedRec.frameCount || 0} frames · ${formatDuration(Date.now() - selectedRec.startedAt)})`
