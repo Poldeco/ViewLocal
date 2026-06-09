@@ -200,24 +200,28 @@ FunctionEnd
   FileWrite $9 "}"
   FileClose $9
 
-  ; Drop legacy registry value names from old builds so we don't have stale
-  ; duplicates pointing to previous install paths after an upgrade.
+  ; Remove legacy per-user autostart channels from older builds. Autostart and
+  ; resilience are now owned by the "ViewLocal Agent" / "ViewLocal Watchdog"
+  ; scheduled tasks (see install-tasks.ps1), which a standard user cannot kill.
+  Delete "$SMSTARTUP\ViewLocal Client.lnk"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "viewlocal-client"
+  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "com.poldeco.viewlocal.client"
 
-  ; Dual-channel autostart: Startup-folder shortcut AND HKCU\...\Run, both
-  ; with --hidden so the client never shows the settings window on login.
-  ; The main process's second-instance handler treats any hidden-flag launch
-  ; as a no-op, so if both channels fire the duplicate is silently dropped.
-  Delete "$SMSTARTUP\ViewLocal Client.lnk"
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"
-  ${If} $AutostartState == ${BST_CHECKED}
-    CreateShortcut "$SMSTARTUP\ViewLocal Client.lnk" "$INSTDIR\ViewLocal Client.exe" "--hidden" "$INSTDIR\ViewLocal Client.exe" 0
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client" '"$INSTDIR\ViewLocal Client.exe" --hidden'
+  ; Register the agent + SYSTEM watchdog scheduled tasks (perMachine install is
+  ; elevated, so PowerShell here runs as admin and can create the SYSTEM task).
+  nsExec::ExecToLog `powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\service\install-tasks.ps1" -ExePath "$INSTDIR\ViewLocal Client.exe" -WatchdogScript "$INSTDIR\resources\watchdog.js"`
+  Pop $1
+  ${If} $1 != "0"
+    MessageBox MB_ICONEXCLAMATION "ViewLocal: failed to register resilience tasks (exit $1). The client will still run, but auto-restart protection is not active. Re-run the installer as administrator."
   ${EndIf}
 !macroend
 
 !macro customUnInstall
+  ; Tear down the scheduled tasks (stops the watchdog before it can relaunch).
+  nsExec::ExecToLog `powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\service\uninstall-tasks.ps1"`
+  Pop $1
+
   Delete "$SMSTARTUP\ViewLocal Client.lnk"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "viewlocal-client"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ViewLocal Client"

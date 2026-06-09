@@ -78,6 +78,25 @@ const HOSTNAME = os.hostname();
 const USERNAME = os.userInfo().username;
 const OS_LABEL = `${os.platform()} ${os.release()}`;
 
+// Heartbeat: the SYSTEM watchdog task reads this file's mtime to decide whether
+// the agent is alive. Written on a fixed 1s timer INDEPENDENT of socket/capture
+// state, so a server outage (capture loop returns early) never looks like a dead
+// agent and never triggers a spurious relaunch.
+const HEARTBEAT_DIR = path.join(process.env.ProgramData || 'C:\\ProgramData', 'ViewLocal');
+const HEARTBEAT_FILE = path.join(HEARTBEAT_DIR, 'agent-heartbeat');
+let heartbeatTimer = null;
+
+function startHeartbeat() {
+  if (process.platform !== 'win32') return; // watchdog is Windows-only
+  const beat = () => {
+    try { fs.writeFileSync(HEARTBEAT_FILE, String(Date.now())); } catch (_) {}
+  };
+  try { fs.mkdirSync(HEARTBEAT_DIR, { recursive: true }); } catch (_) {}
+  beat();
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(beat, 1000);
+}
+
 const HIDDEN_FLAGS = new Set(['--hidden', '/hidden', '/h']);
 function isHiddenLaunch(argv) {
   if (!Array.isArray(argv)) return false;
@@ -336,6 +355,7 @@ ipcMain.handle('update:check', () => checkForUpdatesManual());
 app.whenReady().then(async () => {
   if (process.platform === 'win32') app.setAppUserModelId('com.poldeco.viewlocal.client');
   applyBootstrapConfig();
+  startHeartbeat();
   await ensureCaptureWindow();
   connect();
   startCaptureLoop();
@@ -351,5 +371,6 @@ app.on('window-all-closed', (e) => {
 
 app.on('before-quit', () => {
   if (captureTimer) clearInterval(captureTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (socket) try { socket.close(); } catch (_) {}
 });
